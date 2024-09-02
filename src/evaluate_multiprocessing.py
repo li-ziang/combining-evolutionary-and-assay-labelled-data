@@ -22,6 +22,7 @@ def evaluate_predictor(dataset_name, predictor_name, joint_training,
         n_train, metric_topk, max_n_mut, train_on_single, ignore_gaps,
         seed, predictor_params, outpath):
     print(f'----- predictor {predictor_name}, seed {seed} -----')
+    print(dataset_name)
     outpath = f'{outpath}-{os.getpid()}'  # each process writes to its own file
     data = load_data_split(dataset_name, split_id=-1,
             ignore_gaps=ignore_gaps)
@@ -52,7 +53,7 @@ def evaluate_predictor(dataset_name, predictor_name, joint_training,
         predictor.train(train.seq.values, train.log_fitness.values)
         test['pred'] = predictor.predict(test.seq.values)
     else:
-        # downsample to ntrain
+
         train = predictor.select_training_data(train, n_train)
         assert len(train) == n_train, (
             f'expected {n_train} train examples, received {len(train)}')
