@@ -6,7 +6,7 @@ from sklearn.linear_model import Ridge, Lasso, LinearRegression
 
 from utils import seqs_to_onehot, read_fasta, load_rows_by_numbers
 from predictors.base_predictors import BaseRegressionPredictor, BaseGPPredictor
-
+import pickle
 
 class ESMPredictor(BaseRegressionPredictor):
     """ESM likelihood as features in regression."""
@@ -21,18 +21,29 @@ class ESMPredictor(BaseRegressionPredictor):
 
         esm_data_path = path_prefix + os.path.join('inference', dataset_name,
                 'esm', rep_name, 'pll.csv')
+        psnet_data_path = esm_data_path.replace('pll.csv', 'psnet.pkl')
+
+        with open(psnet_data_path, 'rb') as f:
+            data = pickle.load(f)
         ll = pd.read_csv(esm_data_path, index_col=0)
         ll['id'] = ll.index.to_series().apply(
                 lambda x: int(x.replace('id_', '')))
+        
         ll = ll.join(id2seq, on='id', how='left')
+        ll['ddg'] = data
         self.seq2score_dict = dict(zip(ll.seq, ll.pll))
+        # self.seq2score_dict = dict(zip(ll.seq, zip(ll.pll, ll.ddg)))
+        
+        print(len(self.seq2score_dict))
 
     def seq2score(self, seqs):
         scores = np.array([self.seq2score_dict.get(s, 0.0) for s in seqs])
         return scores
 
     def seq2feat(self, seqs):
-        return self.seq2score(seqs)[:, None]
+        print(len(seqs))
+        print(self.seq2score(seqs)[:, None].reshape(len(seqs),-1).shape)
+        return self.seq2score(seqs)[:, None].reshape(len(seqs),-1)
 
     def predict_unsupervised(self, seqs):
         return self.seq2score(seqs)
