@@ -18,27 +18,28 @@ class EVPredictor(BaseRegressionPredictor):
         reg_coef=1e-8, ignore_gaps=False, **kwargs):
         super(EVPredictor, self).__init__(dataset_name, reg_coef=reg_coef,
                 **kwargs)
-        self.ignore_gaps = ignore_gaps
-        self.couplings_model_path = os.path.join('inference', dataset_name,
-                'plmc', model_name + '.model_params')
-        self.couplings_model = CouplingsModel(self.couplings_model_path)
-        wtseqs, wtids = read_fasta(os.path.join('data', dataset_name,
-            'wt.fasta'), return_ids=True)
-        if '/' in wtids[0]:
-            self.offset = int(wtids[0].split('/')[-1].split('-')[0])
-        else:
-            self.offset = 1
-        expected_wt = wtseqs[0]
-        for pf, pm in self.couplings_model.index_map.items():
-            if expected_wt[pf-self.offset] != self.couplings_model.target_seq[pm]:
-                print(f'WT and model target seq mismatch at {pf}')
+
+        path_prefix = ''
+        seqs_path = path_prefix + os.path.join('data', dataset_name, 'seqs.fasta')
+        seqs = read_fasta(seqs_path)
+        id2seq = pd.Series(index=np.arange(len(seqs)), data=seqs, name='seq')
+
+        data_path = path_prefix + os.path.join('inference', dataset_name,
+                'ev', 'pll.csv')
+        ll = pd.read_csv(data_path, index_col=0)
+        ll['id'] = ll.index.to_series().apply(
+                lambda x: int(x.replace('id_', '')))
+        
+        ll = ll.join(id2seq, on='id', how='left')
+
+        self.seq2score_dict = dict(zip(ll.seq, ll.pll))
 
     def seq2score(self, seqs):
-        return seq2effect(seqs, self.couplings_model, self.offset,
-                ignore_gaps=self.ignore_gaps)
+        scores = np.array([self.seq2score_dict.get(s, 0.0) for s in seqs])
+        return scores
 
     def seq2feat(self, seqs):
-        return self.seq2score(seqs)[:, None]
+        return self.seq2score(seqs)[:, None].reshape(len(seqs),-1)
 
     def predict_unsupervised(self, seqs):
         return self.seq2score(seqs)
