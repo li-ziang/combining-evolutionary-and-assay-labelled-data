@@ -17,9 +17,22 @@ BASIC_PREDICTOR_MAP = {
     'gesm': esm_predictors.GlobalESMPredictor,
     'gesm_reg': esm_predictors.GlobalESMRegressionPredictor,
     'vae': vae_predictors.VaePredictor,
+    'ddg': esm_predictors.DDGPredictor,
 }
 
 CORE_PREDICTORS = [
+    # 'onehot',
+    # 'ev+onehot', 
+    'gesm+onehot', 
+    # 'eunirep_ll+onehot',
+    # 'vae+onehot', 
+    # 'ev+onehot+ddg', 
+    'gesm+onehot+ddg', 
+    # 'eunirep_ll+onehot+ddg',
+    # 'vae+onehot+ddg'
+]
+
+OLD_CORE_PREDICTORS = [
     'eunirep_reg', 'ev+onehot', 'gesm+onehot', 'eunirep_ll+onehot',
     'vae+onehot',
 ]
