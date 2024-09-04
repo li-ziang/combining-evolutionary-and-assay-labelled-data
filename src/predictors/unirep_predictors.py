@@ -16,7 +16,8 @@ class BaseUniRepPredictor(BaseRegressionPredictor):
     def __init__(self, dataset_name, rep_name, reg_coef=1.0, **kwargs):
         super(BaseUniRepPredictor, self).__init__(
             dataset_name, reg_coef, Ridge)
-        self.load_rep(dataset_name, rep_name)
+        
+        # self.load_rep(dataset_name, rep_name)
 
     def load_rep(self, dataset_name, rep_name):
         self.rep_path = os.path.join('inference', dataset_name,
@@ -55,17 +56,30 @@ class UniRepLLPredictor(BaseUniRepPredictor):
     def __init__(self, dataset_name, rep_name, reg_coef=1e-8, **kwargs):
         super(UniRepLLPredictor, self).__init__(
                 dataset_name, rep_name, reg_coef=reg_coef, **kwargs)
-        self.loss_path = os.path.join('inference', dataset_name,
-                'unirep', rep_name, f'loss.npy*')
+        path_prefix = ''
+        seqs_path = path_prefix + os.path.join('data', dataset_name, 'seqs.fasta')
+        seqs = read_fasta(seqs_path)
+        id2seq = pd.Series(index=np.arange(len(seqs)), data=seqs, name='seq')
+
+        data_path = path_prefix + os.path.join('inference', dataset_name,
+                'eUniRep', 'pll.csv')
+        ll = pd.read_csv(data_path, index_col=0)
+        ll['id'] = ll.index.to_series().apply(
+                lambda x: int(x.replace('id_', '')))
+        
+        ll = ll.join(id2seq, on='id', how='left')
+
+        self.seq2score_dict = dict(zip(ll.seq, ll.pll))
+
+    def seq2score(self, seqs):
+        scores = np.array([self.seq2score_dict.get(s, 0.0) for s in seqs])
+        return scores
 
     def seq2feat(self, seqs):
-        """Look up log likelihood by sequence."""
-        ids = [self.seq2id[s] for s in seqs]
-        return -load_rows_by_numbers(self.loss_path, ids)
+        return self.seq2score(seqs)[:, None].reshape(len(seqs),-1)
 
     def predict_unsupervised(self, seqs):
-        return self.seq2feat(seqs).ravel()
-
+        return self.seq2score(seqs)
 
 class GUniRepLLPredictor(UniRepLLPredictor):
     def __init__(self, dataset_name, **kwargs):
