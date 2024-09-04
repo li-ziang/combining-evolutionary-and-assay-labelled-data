@@ -169,3 +169,8 @@ outputs/
 
 tmp/
 *m8
+
+
+inference/
+
+results/

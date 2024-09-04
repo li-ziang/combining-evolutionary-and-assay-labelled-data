@@ -20,8 +20,8 @@ class ESMPredictor(BaseRegressionPredictor):
         id2seq = pd.Series(index=np.arange(len(seqs)), data=seqs, name='seq')
 
         esm_data_path = path_prefix + os.path.join('inference', dataset_name,
-                'esm', rep_name, 'pll.csv')
-        psnet_data_path = esm_data_path.replace('pll.csv', 'psnet.pkl')
+                'esm', 'pll.csv')
+        psnet_data_path = path_prefix + os.path.join('inference', dataset_name, 'psnet.pkl')
 
         with open(psnet_data_path, 'rb') as f:
             data = pickle.load(f)
