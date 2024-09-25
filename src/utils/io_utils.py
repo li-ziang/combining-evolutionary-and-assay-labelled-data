@@ -77,7 +77,9 @@ def parse_vars(items):
 
 
 def load_data_split(dataset_name, split_id, seed=0, ignore_gaps=False):
-    data_path = os.path.join('data', dataset_name, 'data.csv')
+    fast_eval_files = glob.glob('/nethome/zli3161/DATA-nash/combining-evolutionary-and-assay-labelled-data/data/fast_eval/*/')
+    fast_eval = dataset_name in [i.split('/')[-2] for i in fast_eval_files]
+    data_path = os.path.join('data', dataset_name, 'data.csv') if not fast_eval else os.path.join('data/fast_eval', dataset_name, 'data.csv')
     # Sample shuffles the DataFrame.
     data_pre_split = pd.read_csv(data_path).sample(frac=1.0, random_state=seed)
     if not ignore_gaps:

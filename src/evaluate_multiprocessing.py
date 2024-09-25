@@ -58,7 +58,7 @@ def evaluate_predictor(dataset_name, predictor_name, joint_training,
         assert len(train) == n_train, (
             f'expected {n_train} train examples, received {len(train)}')
         predictor.train(train.seq.values, train.log_fitness.values)
-        test['pred'] = predictor.predict(test.seq.values)
+        test['pred'],vae_score,ddg_score = predictor.predict(test.seq.values,ret_values=True)
 
     metric_fns = {
         'spearman': spearman,
@@ -74,7 +74,19 @@ def evaluate_predictor(dataset_name, predictor_name, joint_training,
         #'aucroc': functools.partial(
         #    aucroc, y_cutoff=get_log_fitness_cutoff(dataset_name)),
     }
-    
+    pred_test_path = outpath[:-9]+'result'+str(os.getpid())+predictor_name+'.npy'
+
+    if not os.path.exists(pred_test_path):
+
+        np.save(pred_test_path, [test.pred.values,test.log_fitness.values,vae_score,ddg_score])
+    else:
+        test_pred, test_log_fitness,test_vae_score,test_ddg_score = np.load(pred_test_path, allow_pickle=True)
+        test_pred = np.concatenate((test_pred, test.pred.values))
+        test_log_fitness = np.concatenate((test_log_fitness, test.log_fitness.values))
+        test_vae_score = np.concatenate((test_vae_score, vae_score))
+        test_ddg_score = np.concatenate((test_ddg_score, ddg_score))
+        np.save(pred_test_path, [test_pred, test_log_fitness,test_vae_score,test_ddg_score])
+
     results_dict = {k: mf(test.pred.values, test.log_fitness.values)
             for k, mf in metric_fns.items()}
     if 'n_mut' in data.columns:
@@ -102,6 +114,7 @@ def evaluate_predictor(dataset_name, predictor_name, joint_training,
     else:
         results.to_csv(outpath, mode='w', index=False,
                 columns=sorted(results.columns.values))
+
     return results
 
 

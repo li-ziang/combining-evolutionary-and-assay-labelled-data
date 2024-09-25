@@ -6,20 +6,21 @@ from sklearn.linear_model import Ridge, Lasso, LinearRegression
 
 from utils import seqs_to_onehot, get_wt_seq, read_fasta, seq2effect, mutant2seq
 from predictors.base_predictors import BaseRegressionPredictor
-
+import glob
 
 class VaePredictor(BaseRegressionPredictor):
     "deepseq vae prediction."""
 
     def __init__(self, dataset_name, reg_coef=1e-8, **kwargs):
         super(VaePredictor, self).__init__(dataset_name, reg_coef=reg_coef, **kwargs)
+        fast_eval_files = glob.glob('/nethome/zli3161/DATA-nash/combining-evolutionary-and-assay-labelled-data/data/fast_eval/*/')
+        fast_eval = dataset_name in [i.split('/')[-2] for i in fast_eval_files]
         path_prefix = ''
-        seqs_path = path_prefix + os.path.join('data', dataset_name, 'seqs.fasta')
+        seqs_path = path_prefix + os.path.join('data', dataset_name, 'seqs.fasta') if not fast_eval else path_prefix + os.path.join('data/fast_eval', dataset_name, 'seqs.fasta')
         seqs = read_fasta(seqs_path)
         id2seq = pd.Series(index=np.arange(len(seqs)), data=seqs, name='seq')
 
-        data_path = path_prefix + os.path.join('inference', dataset_name,
-                'DeepSequence', 'pll.csv')
+        data_path = path_prefix + os.path.join('inference', dataset_name,'DeepSequence', 'pll.csv') if not fast_eval else path_prefix + os.path.join('inference', 'fast_eval', dataset_name, 'DeepSequence', 'pll.csv')
         ll = pd.read_csv(data_path, index_col=0)
         ll['id'] = ll.index.to_series().apply(
                 lambda x: int(x.replace('id_', '')))

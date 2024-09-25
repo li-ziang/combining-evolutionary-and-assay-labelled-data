@@ -9,7 +9,10 @@ from sklearn.model_selection import cross_val_score
 from sklearn.metrics import make_scorer
 
 import utils
-
+import glob
+from utils import seqs_to_onehot, read_fasta, load_rows_by_numbers
+import pandas as pd
+import pickle
 
 REG_COEF_LIST = [1e-1, 1e0, 1e1, 1e2, 1e3]
 
@@ -76,7 +79,40 @@ class BoostingPredictor(BasePredictor):
     def select_training_data(self, data, n_train):
         return self.weak_learners[0].select_training_data(data, n_train)
 
+class DDGPredictor_null():
+    def __init__(self, dataset_name, reg_coef=1e-8, path_prefix='',
+            **kwargs):
+        super(DDGPredictor_null, self).__init__()
+        fast_eval_files = glob.glob('/nethome/zli3161/DATA-nash/combining-evolutionary-and-assay-labelled-data/data/fast_eval/*/')
+        fast_eval = dataset_name in [i.split('/')[-2] for i in fast_eval_files]
+        seqs_path = path_prefix + os.path.join('data', dataset_name, 'seqs.fasta') if not fast_eval else path_prefix + os.path.join('data/fast_eval', dataset_name, 'seqs.fasta')
+        seqs = read_fasta(seqs_path)
+        id2seq = pd.Series(index=np.arange(len(seqs)), data=seqs, name='seq')
 
+        esm_data_path = path_prefix + os.path.join('inference', dataset_name,
+                'esm', 'pll.csv') if not fast_eval else path_prefix + os.path.join('inference', 'fast_eval', dataset_name, 'DeepSequence', 'pll.csv')
+        psnet_data_path = path_prefix + os.path.join('inference', dataset_name, 'psnet.pkl') if not fast_eval else path_prefix + os.path.join('inference', 'fast_eval', dataset_name, 'psnet.pkl')
+
+        with open(psnet_data_path, 'rb') as f:
+            data = pickle.load(f)
+        ll = pd.read_csv(esm_data_path, index_col=0)
+        ll['id'] = ll.index.to_series().apply(
+                lambda x: int(x.replace('id_', '')))
+        
+        ll = ll.join(id2seq, on='id', how='left')
+        ll['ddg'] = data
+        self.seq2score_dict = dict(zip(ll.seq, ll.ddg))
+
+
+    def seq2score(self, seqs):
+        scores = np.array([self.seq2score_dict.get(s, 0.0) for s in seqs])
+        return scores
+
+    def seq2feat(self, seqs):
+        return self.seq2score(seqs)[:, None].reshape(len(seqs),-1)
+
+    def predict_unsupervised(self, seqs):
+        return self.seq2score(seqs) 
 class BaseRegressionPredictor(BasePredictor):
 
     def __init__(self, dataset_name, reg_coef=None,
@@ -86,6 +122,7 @@ class BaseRegressionPredictor(BasePredictor):
         self.linear_model_cls = linear_model_cls
         self.model = None
 
+        self.DDGPredictor = DDGPredictor_null(dataset_name)
     def seq2feat(self, seqs):
         raise NotImplementedError
 
@@ -106,9 +143,23 @@ class BaseRegressionPredictor(BasePredictor):
         self.model = self.linear_model_cls(alpha=self.reg_coef)
         self.model.fit(X, train_labels)
 
-    def predict(self, predict_seqs):
+    def predict(self, predict_seqs,ret_values=False):
         if self.model is None:
             return np.random.randn(len(predict_seqs))
+
+        if ret_values:
+            X = self.seq2feat(predict_seqs)
+            if len(self.predictors)==3:
+                vae_score = X[:,0]
+                ddg_score = X[:,-1]
+                return self.model.predict(X),vae_score/np.sqrt(1.0 / self.predictors[0].reg_coef),ddg_score/np.sqrt(1.0 / self.predictors[-1].reg_coef)
+            elif len(self.predictors)==2:
+                x = self.DDGPredictor.seq2feat(predict_seqs)
+                
+                vae_score = X[:,0]
+                ddg_score = x.squeeze()
+                return self.model.predict(X),vae_score/np.sqrt(1.0 / self.predictors[0].reg_coef),ddg_score
+       
         X = self.seq2feat(predict_seqs)
         return self.model.predict(X)
 
@@ -127,11 +178,14 @@ class JointPredictor(BaseRegressionPredictor):
             else:
                 self.predictors.append(c(dataset_name, **kwargs))
 
+        
     def seq2feat(self, seqs):
         # To apply different regularziation coefficients we scale the features
         # by a multiplier in Ridge regression
         features = [p.seq2feat(seqs) * np.sqrt(1.0 / p.reg_coef)
             for p in self.predictors]
+        
+
         return np.concatenate(features, axis=1)
 
 

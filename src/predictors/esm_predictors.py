@@ -7,20 +7,23 @@ from sklearn.linear_model import Ridge, Lasso, LinearRegression
 from utils import seqs_to_onehot, read_fasta, load_rows_by_numbers
 from predictors.base_predictors import BaseRegressionPredictor, BaseGPPredictor
 import pickle
+import glob
+
 
 
 class DDGPredictor(BaseRegressionPredictor):
     def __init__(self, dataset_name, reg_coef=1e-8, path_prefix='',
             **kwargs):
         super(DDGPredictor, self).__init__(dataset_name, reg_coef, Ridge)
-
-        seqs_path = path_prefix + os.path.join('data', dataset_name, 'seqs.fasta')
+        fast_eval_files = glob.glob('/nethome/zli3161/DATA-nash/combining-evolutionary-and-assay-labelled-data/data/fast_eval/*/')
+        fast_eval = dataset_name in [i.split('/')[-2] for i in fast_eval_files]
+        seqs_path = path_prefix + os.path.join('data', dataset_name, 'seqs.fasta') if not fast_eval else path_prefix + os.path.join('data/fast_eval', dataset_name, 'seqs.fasta')
         seqs = read_fasta(seqs_path)
         id2seq = pd.Series(index=np.arange(len(seqs)), data=seqs, name='seq')
 
         esm_data_path = path_prefix + os.path.join('inference', dataset_name,
-                'esm', 'pll.csv')
-        psnet_data_path = path_prefix + os.path.join('inference', dataset_name, 'psnet.pkl')
+                'esm', 'pll.csv') if not fast_eval else path_prefix + os.path.join('inference', 'fast_eval', dataset_name, 'DeepSequence', 'pll.csv')
+        psnet_data_path = path_prefix + os.path.join('inference', dataset_name, 'psnet.pkl') if not fast_eval else path_prefix + os.path.join('inference', 'fast_eval', dataset_name, 'psnet.pkl')
 
         with open(psnet_data_path, 'rb') as f:
             data = pickle.load(f)
